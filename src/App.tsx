@@ -10,9 +10,7 @@ import NotFound from "./pages/NotFound";
 import FindGroups from "./pages/FindGroups";
 import CreateGroup from "./pages/CreateGroup";
 import MeetPeople from "./pages/MeetPeople";
-
-import Sidebar from "./components/Sidebar";
-import Settings from "./pages/Settings";
+import Settings from "./pages/Settings"; // ✅ new
 
 const queryClient = new QueryClient();
 
@@ -20,25 +18,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
-        <div className="flex min-h-screen">
-          {/* Left sidebar (hidden on mobile) */}
-          <Sidebar />
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/find-groups" element={<FindGroups />} />
+          <Route path="/create-group" element={<CreateGroup />} />
+          <Route path="/meet-people" element={<MeetPeople />} />
+          <Route path="/settings" element={<Settings />} /> {/* ✅ new */}
+          {/* keep this last */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
 
-          {/* Main content shifts right only on md+ so mobile stays full-width */}
-          <div className="flex-1 md:ml-20">
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/find-groups" element={<FindGroups />} />
-              <Route path="/create-group" element={<CreateGroup />} />
-              <Route path="/meet-people" element={<MeetPeople />} />
-              <Route path="/settings" element={<Settings />} />
-              {/* Catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </div>
-        </div>
-
-        {/* Your existing toasters */}
+        {/* toast systems */}
         <Toaster />
         <Sonner />
       </BrowserRouter>
