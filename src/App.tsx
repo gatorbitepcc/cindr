@@ -11,6 +11,7 @@ import FindGroups from "./pages/FindGroups";
 import CreateGroup from "./pages/CreateGroup";
 import MeetPeople from "./pages/MeetPeople";
 import Settings from "./pages/Settings"; // ✅ new
+import Messages from "./pages/Messages";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/create-group" element={<CreateGroup />} />
           <Route path="/meet-people" element={<MeetPeople />} />
           <Route path="/settings" element={<Settings />} /> {/* ✅ new */}
+          <Route path="/messages" element={<Messages />} />
           {/* keep this last */}
           <Route path="*" element={<NotFound />} />
         </Routes>

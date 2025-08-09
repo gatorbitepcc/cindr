@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
-import { Heart, Users, MapPin, Sparkles, UserPlus, Search, Settings } from 'lucide-react';
+import { Heart, Users, MapPin, Sparkles, UserPlus, Search, Settings, MessageCircle } from 'lucide-react';
 import heroImage from '@/assets/hero-image.jpg';
 
 const Index = () => {
@@ -65,7 +65,7 @@ const Index = () => {
 
       {/* Main Navigation Section */}
       <section className="py-12 px-4">
-        <div className="container mx-auto max-w-4xl text-center">
+        <div className="container mx-auto max-w-5xl text-center">
           <h2 className="text-3xl font-bold text-foreground mb-4">
             How would you like to connect?
           </h2>
@@ -73,8 +73,8 @@ const Index = () => {
             Choose your path to building meaningful connections and finding the support you need.
           </p>
           
-          <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            {/* Find Groups Button */}
+          <div className="grid md:grid-cols-4 gap-6">
+            {/* Find Groups Button (TEMP: goes to Settings) */}
             <Link to="/settings" className="group">
               <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
                 <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
@@ -118,6 +118,22 @@ const Index = () => {
                 </p>
                 <Button variant="outline" className="w-full border-success text-success hover:bg-success hover:text-success-foreground">
                   Start Matching
+                </Button>
+              </div>
+            </Link>
+
+            {/* Messages Button */}
+            <Link to="/messages" className="group">
+              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
+                  <MessageCircle className="w-8 h-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-card-foreground mb-3">Messages</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Chat with people you’ve connected with and keep the conversation going.
+                </p>
+                <Button variant="outline" className="w-full border-blue-400 text-blue-600 hover:bg-blue-100 hover:text-blue-800">
+                  Open Messages
                 </Button>
               </div>
             </Link>
