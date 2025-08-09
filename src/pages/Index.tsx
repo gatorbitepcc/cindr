@@ -75,7 +75,7 @@ const Index = () => {
           
           <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
             {/* Find Groups Button */}
-            <Link to="/find-groups" className="group">
+            <Link to="/settings" className="group">
               <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
                 <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
                   <Search className="w-8 h-8 text-primary-foreground" />
