@@ -1,17 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { AuthModal } from './AuthModal';
 import cindrLogo from '@/assets/cindr-logo.png';
+import { onAuthStateChanged, getAuth, User } from 'firebase/auth';
+import { auth, db } from '@/lib/firebase';
 
 export const Header = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [user, setUser] = useState<User | null>(null);
 
   const openAuthModal = (mode: 'signin' | 'signup') => {
     setAuthMode(mode);
     setAuthModalOpen(true);
   };
+
+  useEffect(() => {
+    const userChange = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      console.log(firebaseUser);
+    });
+    return () => userChange();
+  }, []);
+
 
   return (
     <>
@@ -33,21 +45,23 @@ export const Header = () => {
             </div>
           </Link>
           
-          <div className="flex items-center space-x-3">
-            <Button 
-              variant="outline" 
-              onClick={() => openAuthModal('signin')}
-              className="border-primary/20 hover:bg-primary/10 hover:text-foreground"
-            >
-              Sign In
-            </Button>
-            <Button 
-              onClick={() => openAuthModal('signup')}
-              className="bg-primary hover:bg-primary/90"
-            >
-              Sign Up
-            </Button>
-          </div>
+          {!user && (
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={() => openAuthModal('signin')}
+                className="border-primary/20 hover:bg-primary/10 hover:text-foreground"
+              >
+                Sign In
+              </Button>
+              <Button 
+                onClick={() => openAuthModal('signup')}
+                className="bg-primary hover:bg-primary/90"
+              >
+                Sign Up
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 

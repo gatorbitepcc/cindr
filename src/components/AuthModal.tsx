@@ -17,10 +17,9 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   mode: 'signin' | 'signup';
-  onModeSwitch: () => void;
 }
 
-export const AuthModal = ({ isOpen, onClose, mode, onModeSwitch }: AuthModalProps) => {
+export const AuthModal = ({ isOpen, onClose, mode }: AuthModalProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -218,34 +217,6 @@ export const AuthModal = ({ isOpen, onClose, mode, onModeSwitch }: AuthModalProp
             {loading ? 'Processing...' : (mode === 'signin' ? 'Sign In' : 'Create Account')}
           </Button>
         </form>
-        
-        <div className="text-center text-sm text-muted-foreground">
-          {mode === 'signin' ? (
-            <>
-              Don't have an account?{' '}
-              <button 
-                type="button"
-                onClick={onModeSwitch}
-                className="text-primary hover:underline"
-                disabled={loading}
-              >
-                Sign up here
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button 
-                type="button"
-                onClick={onModeSwitch}
-                className="text-primary hover:underline"
-                disabled={loading}
-              >
-                Sign in here
-              </button>
-            </>
-          )}
-        </div>
       </DialogContent>
     </Dialog>
   );
