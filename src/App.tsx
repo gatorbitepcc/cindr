@@ -10,8 +10,9 @@ import NotFound from "./pages/NotFound";
 import FindGroups from "./pages/FindGroups";
 import CreateGroup from "./pages/CreateGroup";
 import MeetPeople from "./pages/MeetPeople";
-import Settings from "./pages/Settings"; // ✅ new
+import Settings from "./pages/Settings";
 import Messages from "./pages/Messages";
+import FindMatches from "./pages/FindMatches";
 
 const queryClient = new QueryClient();
 
@@ -23,9 +24,9 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/find-groups" element={<FindGroups />} />
           <Route path="/create-group" element={<CreateGroup />} />
-          <Route path="/meet-people" element={<MeetPeople />} />
           <Route path="/settings" element={<Settings />} /> {/* ✅ new */}
           <Route path="/messages" element={<Messages />} />
+          <Route path="/find-matches" element={<FindMatches />} />
           {/* keep this last */}
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -39,3 +40,4 @@ const App = () => (
 );
 
 export default App;
+

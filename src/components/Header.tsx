@@ -5,6 +5,9 @@ import { AuthModal } from './AuthModal';
 import cindrLogo from '@/assets/cindr-logo.png';
 import { onAuthStateChanged, getAuth, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+import ConnectionInbox from './ConnectionInbox';
+
 
 export const Header = () => {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -16,6 +19,15 @@ export const Header = () => {
     setAuthModalOpen(true);
   };
 
+  const logOut = async () => {
+    try {
+      await signOut(auth);
+      console.log('User signed out');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
   useEffect(() => {
     const userChange = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -23,8 +35,8 @@ export const Header = () => {
     });
     return () => userChange();
   }, []);
-
-
+  
+  
   return (
     <>
       <header className="bg-card/80 backdrop-blur-sm border-b border-border sticky top-0 z-50">
@@ -44,8 +56,10 @@ export const Header = () => {
               </p>
             </div>
           </Link>
+
           
-          {!user && (
+          
+          {!user ? (
             <div className="flex items-center space-x-3">
               <Button 
                 variant="outline" 
@@ -61,6 +75,18 @@ export const Header = () => {
                 Sign Up
               </Button>
             </div>
+          ) : (
+            <>
+              <ConnectionInbox />
+              <div className="flex items-center space-x-3">
+                <Button 
+                  onClick={logOut}
+                  className="bg-primary hover:bg-primary/90"
+                  >
+                  Sign Out
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </header>
