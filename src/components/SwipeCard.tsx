@@ -1,14 +1,16 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Heart, X, MapPin, Tag } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils'; // Make sure this file exists — otherwise replace `cn(...)` with a string
 
+// Define the data shape for each swipeable card
 export interface CardData {
   id: string;
   type: 'person' | 'resource';
   name: string;
   age?: number;
   role?: string;
-  description: string;
+  bio?: string;
+  description?: string;
   location: string;
   tags: string[];
   image?: string;
@@ -21,11 +23,11 @@ interface SwipeCardProps {
   isTop?: boolean;
 }
 
-export const SwipeCard = ({ card, onSwipe, isTop = false }: SwipeCardProps) => {
+export const SwipeCard: React.FC<SwipeCardProps> = ({ card, onSwipe, isTop = false }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
-  
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!isTop) return;
     setIsDragging(true);
@@ -51,7 +53,7 @@ export const SwipeCard = ({ card, onSwipe, isTop = false }: SwipeCardProps) => {
   const handleMouseUp = () => {
     if (!isDragging || !isTop) return;
     setIsDragging(false);
-    
+
     const threshold = 100;
     if (Math.abs(dragOffset.x) > threshold) {
       onSwipe(dragOffset.x > 0 ? 'right' : 'left', card.id);
@@ -73,7 +75,9 @@ export const SwipeCard = ({ card, onSwipe, isTop = false }: SwipeCardProps) => {
         !isTop && "scale-95 opacity-60 pointer-events-none"
       )}
       style={{
-        transform: isTop ? `translate(${dragOffset.x}px, ${dragOffset.y}px) rotate(${dragOffset.x * 0.1}deg)` : undefined,
+        transform: isTop
+          ? `translate(${dragOffset.x}px, ${dragOffset.y}px) rotate(${dragOffset.x * 0.1}deg)`
+          : undefined,
         zIndex: isTop ? 10 : 1
       }}
       onMouseDown={handleMouseDown}
@@ -112,6 +116,10 @@ export const SwipeCard = ({ card, onSwipe, isTop = false }: SwipeCardProps) => {
           </div>
         </div>
 
+        {card.bio && (
+          <div className="text-sm text-slate-600 line-clamp-3">{card.bio}</div>
+        )}
+
         <p className="text-sm text-muted-foreground line-clamp-2">{card.description}</p>
 
         <div className="flex items-center text-xs text-muted-foreground">
@@ -131,7 +139,9 @@ export const SwipeCard = ({ card, onSwipe, isTop = false }: SwipeCardProps) => {
             </span>
           ))}
           {card.tags.length > 3 && (
-            <span className="text-xs text-muted-foreground">+{card.tags.length - 3}</span>
+            <span className="text-xs text-muted-foreground">
+              +{card.tags.length - 3}
+            </span>
           )}
         </div>
       </div>
