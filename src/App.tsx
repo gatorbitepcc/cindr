@@ -9,7 +9,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import FindGroups from "./pages/FindGroups";
 import CreateGroup from "./pages/CreateGroup";
-import MeetPeople from "./pages/MeetPeople";
 import Settings from "./pages/Settings";
 import Messages from "./pages/Messages";
 import FindMatches from "./pages/FindMatches";

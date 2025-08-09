@@ -77,7 +77,6 @@ export const Header = () => {
             </div>
           ) : (
             <>
-              <ConnectionInbox />
               <div className="flex items-center space-x-3">
                 <Button 
                   onClick={logOut}
