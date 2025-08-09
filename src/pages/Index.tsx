@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
-import { Heart, Users, MapPin, Sparkles, UserPlus, Search } from 'lucide-react';
+import { Heart, Users, MapPin, Sparkles, UserPlus, Search, Settings } from 'lucide-react';
 import heroImage from '@/assets/hero-image.jpg';
 
 const Index = () => {
@@ -118,6 +118,22 @@ const Index = () => {
                 </p>
                 <Button variant="outline" className="w-full border-success text-success hover:bg-success hover:text-success-foreground">
                   Start Matching
+                </Button>
+              </div>
+            </Link>
+
+            {/* Settings Button */}
+            <Link to="/settings" className="group">
+              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
+                <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
+                  <Settings className="w-8 h-8 text-gray-800" />
+                </div>
+                <h3 className="text-xl font-semibold text-card-foreground mb-3">Settings</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Manage your profile, update your username, and change your preferences.
+                </p>
+                <Button variant="outline" className="w-full border-gray-400 text-gray-800 hover:bg-gray-200 hover:text-black">
+                  Open Settings
                 </Button>
               </div>
             </Link>
