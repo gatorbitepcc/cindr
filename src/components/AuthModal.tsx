@@ -6,6 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { auth, googleProvider, db } from '@/lib/firebase';
+import {
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -21,7 +28,28 @@ export const AuthModal = ({ isOpen, onClose, mode }: AuthModalProps) => {
   const [bio, setBio] = useState('');
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const createUserDoc = async (uid: string, email: string) => {
+    try {
+      const userDocRef = doc(db, 'users', uid);
+      const userData = {
+        uid,
+        email,
+        name: name || '',
+        role: role || '',
+        bio: bio || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      await setDoc(userDocRef, userData);
+      console.log('User document created successfully');
+    } catch (error) {
+      console.error('Error creating user document:', error);
+      throw error;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     toast({
@@ -32,6 +60,10 @@ export const AuthModal = ({ isOpen, onClose, mode }: AuthModalProps) => {
       className: "bg-success-soft border-success text-success-foreground"
     });
     
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    await createUserDoc(result.user.uid, result.user.email || '');
+
+
     onClose();
     // Reset form
     setEmail('');
@@ -39,6 +71,7 @@ export const AuthModal = ({ isOpen, onClose, mode }: AuthModalProps) => {
     setName('');
     setRole('');
     setBio('');
+
   };
 
   return (

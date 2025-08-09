@@ -37,7 +37,7 @@ export const Header = () => {
             <Button 
               variant="outline" 
               onClick={() => openAuthModal('signin')}
-              className="border-primary/20 hover:bg-primary/5"
+              className="border-primary/20 hover:bg-primary/10 hover:text-foreground"
             >
               Sign In
             </Button>
