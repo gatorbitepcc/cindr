@@ -1,26 +1,13 @@
-import { SwipeFeed } from '@/components/SwipeFeed';
-import { Heart, Users, MapPin, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Header } from '@/components/Header';
+import { Button } from '@/components/ui/button';
+import { Heart, Users, MapPin, Sparkles, UserPlus, Search } from 'lucide-react';
 import heroImage from '@/assets/hero-image.jpg';
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-background">
-      {/* Header */}
-      <header className="bg-card/80 backdrop-blur-sm border-b border-border sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center">
-              <Heart className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Cindr
-            </h1>
-          </div>
-          <p className="text-sm text-muted-foreground hidden sm:block">
-            Swipe your way to support
-          </p>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative py-12 px-4 text-center">
@@ -76,37 +63,70 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Main Swipe Section */}
-      <section className="py-8 px-4">
-        <div className="container mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-2">
-            Start Swiping
+      {/* Main Navigation Section */}
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl font-bold text-foreground mb-4">
+            How would you like to connect?
           </h2>
-          <p className="text-muted-foreground mb-8">
-            Swipe right to connect or save, left to skip
+          <p className="text-muted-foreground mb-12 max-w-2xl mx-auto">
+            Choose your path to building meaningful connections and finding the support you need.
           </p>
           
-          <SwipeFeed />
-          
-          <div className="mt-8 flex justify-center space-x-8 text-sm text-muted-foreground">
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center mr-2 border border-border">
-                <span className="text-destructive">✕</span>
+          <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            {/* Find Groups Button */}
+            <Link to="/find-groups" className="group">
+              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
+                <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
+                  <Search className="w-8 h-8 text-primary-foreground" />
+                </div>
+                <h3 className="text-xl font-semibold text-card-foreground mb-3">Find a Group</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Join existing support groups in your area and connect with others who share similar experiences.
+                </p>
+                <Button className="w-full bg-primary hover:bg-primary/90 group-hover:shadow-glow transition-shadow">
+                  Browse Groups
+                </Button>
               </div>
-              Skip
-            </div>
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-primary shadow-glow flex items-center justify-center mr-2">
-                <Heart className="w-4 h-4 text-primary-foreground" />
+            </Link>
+
+            {/* Create Group Button */}
+            <Link to="/create-group" className="group">
+              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
+                <div className="w-16 h-16 rounded-full bg-gradient-soft flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
+                  <UserPlus className="w-8 h-8 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold text-card-foreground mb-3">Create a Group</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Start your own support community and bring together people who need connection and understanding.
+                </p>
+                <Button variant="outline" className="w-full border-accent text-accent hover:bg-accent hover:text-accent-foreground">
+                  Start a Group
+                </Button>
               </div>
-              Connect
-            </div>
+            </Link>
+
+            {/* Meet People Button */}
+            <Link to="/meet-people" className="group">
+              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
+                <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
+                  <Heart className="w-8 h-8 text-success" />
+                </div>
+                <h3 className="text-xl font-semibold text-card-foreground mb-3">Meet People</h3>
+                <p className="text-muted-foreground text-sm mb-6">
+                  Connect one-on-one with patients, survivors, caregivers, and supporters through personalized matching.
+                </p>
+                <Button variant="outline" className="w-full border-success text-success hover:bg-success hover:text-success-foreground">
+                  Start Matching
+                </Button>
+              </div>
+            </Link>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-card border-t border-border py-8 px-4 mt-12">
+      <footer className="bg-card border-t border-border py-8 px-4 mt-16">
         <div className="container mx-auto text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-6 h-6 rounded-full bg-gradient-primary flex items-center justify-center">
