@@ -56,6 +56,7 @@ interface ChatInstance {
   time: string;
   unread?: number;
   otherUserId: string;
+  otherUserData?: any;
 }
 
 interface Message {
@@ -119,15 +120,13 @@ const useUserChats = (currentUserId: string) => {
       return;
     }
 
-    // We'll make two separate queries and combine the results
     const unsubscribes: (() => void)[] = [];
     const connectionsMap = new Map<string, Connection>();
 
-    const updateChats = () => {
+    const updateChats = async () => {
       const connections = Array.from(connectionsMap.values())
-        .filter(connection => connection.status === 'accepted'); // FILTER: Only accepted connections
+        .filter(connection => connection.status === 'accepted');
       
-      // Sort by lastMessageAt desc, then createdAt desc
       connections.sort((a, b) => {
         const aTime = a.lastMessageAt || a.createdAt;
         const bTime = b.lastMessageAt || b.createdAt;
@@ -139,31 +138,35 @@ const useUserChats = (currentUserId: string) => {
         return bTime.toMillis() - aTime.toMillis();
       });
 
-      const chatInstances: ChatInstance[] = connections.map((data) => {
-        const isFromUser = data.fromUserId === currentUserId;
-        const otherUserName = isFromUser ? data.toUserName : data.fromUserName;
-        const otherUserId = isFromUser ? data.toUserId : data.fromUserId;
+      const chatInstances: ChatInstance[] = await Promise.all(
+        connections.map(async (data) => {
+          const isFromUser = data.fromUserId === currentUserId;
+          const otherUserName = isFromUser ? data.toUserName : data.fromUserName;
+          const otherUserId = isFromUser ? data.toUserId : data.fromUserId;
 
-        return {
-          id: data.id,
-          name: otherUserName,
-          lastMessage: data.lastMessage || '',
-          time: formatMessageTime(data.lastMessageAt || data.createdAt),
-          otherUserId,
-          unread: 0 // You can implement unread count logic here
-        };
-      });
+          const otherUserData = await getUserProfile(otherUserId);
+
+          return {
+            id: data.id,
+            name: otherUserData?.name || otherUserName,
+            lastMessage: data.lastMessage || '',
+            time: formatMessageTime(data.lastMessageAt || data.createdAt),
+            otherUserId,
+            otherUserData,
+            unread: 0
+          };
+        })
+      );
 
       setChats(chatInstances);
       setLoading(false);
       setError(null);
     };
 
-    // Query for connections where current user is the 'from' user AND status is 'accepted'
     const fromQuery = query(
       collection(db, 'connections'),
       where('fromUserId', '==', currentUserId),
-      where('status', '==', 'accepted') // FILTER: Only accepted connections
+      where('status', '==', 'accepted')
     );
 
     const unsubscribe1 = onSnapshot(
@@ -187,11 +190,10 @@ const useUserChats = (currentUserId: string) => {
       }
     );
 
-    // Query for connections where current user is the 'to' user AND status is 'accepted'
     const toQuery = query(
       collection(db, 'connections'),
       where('toUserId', '==', currentUserId),
-      where('status', '==', 'accepted') // FILTER: Only accepted connections
+      where('status', '==', 'accepted')
     );
 
     const unsubscribe2 = onSnapshot(
@@ -225,7 +227,6 @@ const useUserChats = (currentUserId: string) => {
   return { chats, loading, error };
 };
 
-// Custom hook to get messages for a specific chat
 const useChatMessages = (chatId: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -238,7 +239,6 @@ const useChatMessages = (chatId: string) => {
       return;
     }
 
-    // Option 1: Simple query without orderBy (will sort client-side)
     const messagesQuery = query(
       collection(db, 'messages'),
       where('chatId', '==', chatId)
@@ -253,7 +253,6 @@ const useChatMessages = (chatId: string) => {
             ...doc.data()
           } as Message))
           .sort((a, b) => {
-            // Sort by timestamp client-side
             const aTime = a.timestamp?.toMillis() || 0;
             const bTime = b.timestamp?.toMillis() || 0;
             return aTime - bTime;
@@ -276,7 +275,6 @@ const useChatMessages = (chatId: string) => {
   return { messages, loading, error };
 };
 
-// Function to send a message
 const sendMessage = async (
   chatId: string, 
   senderId: string, 
@@ -286,7 +284,6 @@ const sendMessage = async (
   if (!text.trim()) return;
 
   try {
-    // Add message to messages collection
     await addDoc(collection(db, 'messages'), {
       chatId,
       senderId,
@@ -296,7 +293,6 @@ const sendMessage = async (
       createdAt: serverTimestamp()
     });
 
-    // Update the connection with last message info
     const connectionRef = doc(db, 'connections', chatId);
     await updateDoc(connectionRef, {
       lastMessage: text.trim(),
@@ -310,30 +306,13 @@ const sendMessage = async (
   }
 };
 
-// Function to get user bio
-const getUserBio = async (userId: string): Promise<string> => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (userDoc.exists()) {
-      return userDoc.data().bio || "No bio available";
-    }
-    return "No bio available";
-  } catch (error) {
-    console.error('Error fetching user bio:', error);
-    return "Bio unavailable";
-  }
-};
-
 export default function Messages() {
   const [activeTab, setActiveTab] = useState('messages');
   const [user, authLoading] = useAuthState(auth);
   const [activeId, setActiveId] = useState<string>("");
   const [input, setInput] = useState("");
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [activeChatBio, setActiveChatBio] = useState<string>("");
-  const [bioLoading, setBioLoading] = useState(false);
 
-  // Inbox-specific state
   const [connectionRequests, setConnectionRequests] = useState([]);
   const [inboxLoading, setInboxLoading] = useState(true);
   const [inboxError, setInboxError] = useState<string | null>(null);
@@ -341,18 +320,15 @@ export default function Messages() {
 
   const currentUserId = user?.uid;
 
-  // Use custom hooks for real-time data
   const { chats, loading: chatsLoading, error: chatsError } = useUserChats(currentUserId || '');
   const { messages, loading: messagesLoading, error: messagesError } = useChatMessages(activeId);
 
-  // Load current user profile
   useEffect(() => {
     if (currentUserId) {
       getUserProfile(currentUserId).then(setUserProfile);
     }
   }, [currentUserId]);
 
-  // Listen for connection requests (inbox functionality)
   useEffect(() => {
     if (!currentUserId) {
       setConnectionRequests([]);
@@ -362,7 +338,6 @@ export default function Messages() {
 
     setInboxLoading(true);
     
-    // Query for pending connection requests where current user is the recipient
     const connectionsRef = collection(db, 'connections');
     const q = query(
       connectionsRef,
@@ -380,7 +355,6 @@ export default function Messages() {
           });
         });
         
-        // Sort by creation date (newest first)
         requests.sort((a, b) => {
           if (!a.createdAt || !b.createdAt) return 0;
           return b.createdAt.seconds - a.createdAt.seconds;
@@ -400,7 +374,6 @@ export default function Messages() {
     return () => unsubscribe();
   }, [currentUserId]);
 
-  // Set first chat as active when chats load
   useEffect(() => {
     if (chats.length > 0 && !activeId) {
       setActiveId(chats[0].id);
@@ -412,30 +385,6 @@ export default function Messages() {
     [activeId, chats]
   );
 
-  // Load active chat user bio
-  useEffect(() => {
-    const loadBio = async () => {
-      if (!activeChat?.otherUserId) {
-        setActiveChatBio("");
-        return;
-      }
-
-      setBioLoading(true);
-      try {
-        const bio = await getUserBio(activeChat.otherUserId);
-        setActiveChatBio(bio);
-      } catch (error) {
-        console.error('Error loading bio:', error);
-        setActiveChatBio("Bio unavailable");
-      } finally {
-        setBioLoading(false);
-      }
-    };
-
-    loadBio();
-  }, [activeChat?.otherUserId]);
-
-  // Convert messages to bubble format
   const bubbles: Bubble[] = useMemo(() => {
     return messages.map(msg => ({
       id: msg.id,
@@ -445,7 +394,6 @@ export default function Messages() {
     }));
   }, [messages, currentUserId]);
 
-  // Accept connection request
   const acceptConnection = async (requestId: string, fromUserId: string, fromUserName: string) => {
     if (!currentUserId) return;
 
@@ -473,14 +421,12 @@ export default function Messages() {
     }
   };
 
-  // Decline connection request
   const declineConnection = async (requestId: string, fromUserName: string) => {
     if (!currentUserId) return;
 
     try {
       setProcessingRequests(prev => new Set(prev).add(requestId));
 
-      // Delete the request
       const requestRef = doc(db, 'connections', requestId);
       await deleteDoc(requestRef);
 
@@ -498,7 +444,6 @@ export default function Messages() {
     }
   };
 
-  // Format timestamp for connection requests
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return 'Just now';
     
@@ -516,23 +461,21 @@ export default function Messages() {
     if (!input.trim() || !activeId || !currentUserId) return;
     
     const messageText = input.trim();
-    setInput(""); // Clear input immediately for better UX
+    setInput("");
     
     try {
       await sendMessage(
         activeId, 
         currentUserId, 
-        userProfile?.displayName || user?.displayName || 'Anonymous',
+        userProfile?.name || user?.displayName || 'Anonymous',
         messageText
       );
     } catch (error) {
       console.error('Failed to send message:', error);
-      // Optionally show error to user
-      setInput(messageText); // Restore input on error
+      setInput(messageText);
     }
   };
 
-  // Handle authentication loading
   if (authLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -544,7 +487,6 @@ export default function Messages() {
     );
   }
 
-  // Handle no authentication
   if (!user) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -562,7 +504,6 @@ export default function Messages() {
     );
   }
 
-  // Handle chats loading
   if (chatsLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -574,7 +515,6 @@ export default function Messages() {
     );
   }
 
-  // Handle errors
   if (chatsError) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -592,7 +532,6 @@ export default function Messages() {
     );
   }
 
-
   return (
     <div className="min-h-screen bg-white">
       {/* Top bar */}
@@ -602,14 +541,16 @@ export default function Messages() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-sm text-neutral-500">
-            {userProfile?.displayName || user?.displayName || 'User'}
+            {userProfile?.name || user?.displayName || 'User'}
           </div>
           <div className="size-8 rounded-full bg-neutral-200 overflow-hidden">
-            {user?.photoURL ? (
+            {userProfile?.avatarUrl ? (
+              <img src={userProfile.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+            ) : user?.photoURL ? (
               <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white text-sm font-medium">
-                {(userProfile?.displayName || user?.displayName || 'U').charAt(0).toUpperCase()}
+                {(userProfile?.name || user?.displayName || 'U').charAt(0).toUpperCase()}
               </div>
             )}
           </div>
@@ -618,186 +559,198 @@ export default function Messages() {
 
       <main className="grid grid-cols-[320px_minmax(0,1fr)_360px] h-[calc(100vh-56px)]">
         {/* LEFT: Chats list */}
-             <aside className="w-80 border-r">
-        {/* tabs */}
-        <div className="p-3 flex gap-2">
-          <button 
-            className={cn(
-              "flex-1 h-9 rounded-lg border text-sm flex items-center justify-center gap-2 transition-colors",
-              activeTab === "inbox" 
-                ? "bg-white text-[#ff5a3a] border-[#ff5a3a]" 
-                : "bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100"
-            )}
-            onClick={() => setActiveTab("inbox")}
-          >
-            <Users className="w-4 h-4" /> Connections
-            {connectionRequests.length > 0 && (
-              <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
-                {connectionRequests.length}
-              </span>
-            )}
-          </button>
-          <button 
-            className={cn(
-              "flex-1 h-9 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors",
-              activeTab === "messages" 
-                ? "bg-[#ff5a3a] text-white" 
-                : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-            )}
-            onClick={() => setActiveTab("messages")}
-          >
-            <MessageCircle className="w-4 h-4" /> Messages
-          </button>
-        </div>
-
-        <div className="overflow-y-auto h-full">
-          {/* Messages tab */}
-          {activeTab === "messages" && (
-            <>
-              <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
-                Friends ({chats.length})
-              </div>
-              {chats.length === 0 ? (
-                <div className="px-3 py-8 text-center text-neutral-400 text-sm">
-                  <div className="mb-2">💔</div>
-                  <div>No friends yet</div>
-                  <div className="text-xs mt-1">Keep swiping!</div>
-                </div>
-              ) : (
-                chats.map((chat) => {
-                  const active = chat.id === activeId;
-                  return (
-                    <button
-                      key={chat.id}
-                      onClick={() => setActiveId(chat.id)}
-                      className={cn(
-                        "w-full px-3 py-3 flex items-center gap-3 border-b transition-colors",
-                        active ? "bg-orange-50" : "hover:bg-neutral-50"
-                      )}
-                    >
-                      <div className="relative">
-                        <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold text-sm">
-                          {chat.name.charAt(0)}
-                        </div>
-                        {chat.unread ? (
-                          <span className="absolute -right-1 -top-1 text-[10px] font-semibold bg-[#ff5a3a] text-white rounded-full px-1.5 py-0.5">
-                            {chat.unread}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="text-left min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-medium text-sm truncate">{chat.name}</div>
-                          <div className="text-[11px] text-neutral-500">{chat.time}</div>
-                        </div>
-                        <div className="text-sm text-neutral-500 truncate">
-                          {chat.lastMessage || "Start your conversation! 💬"}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
+        <aside className="w-80 border-r">
+          <div className="p-3 flex gap-2">
+            <button 
+              className={cn(
+                "flex-1 h-9 rounded-lg border text-sm flex items-center justify-center gap-2 transition-colors",
+                activeTab === "inbox" 
+                  ? "bg-white text-[#ff5a3a] border-[#ff5a3a]" 
+                  : "bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100"
               )}
-            </>
-          )}
+              onClick={() => setActiveTab("inbox")}
+            >
+              <Users className="w-4 h-4" /> Connections
+              {connectionRequests.length > 0 && (
+                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                  {connectionRequests.length}
+                </span>
+              )}
+            </button>
+            <button 
+              className={cn(
+                "flex-1 h-9 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors",
+                activeTab === "messages" 
+                  ? "bg-[#ff5a3a] text-white" 
+                  : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+              )}
+              onClick={() => setActiveTab("messages")}
+            >
+              <MessageCircle className="w-4 h-4" /> Messages
+            </button>
+          </div>
 
-        {/* Inbox tab */}
-        {activeTab === "inbox" && (
-          <>
-            <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
-              Connection Requests ({connectionRequests.length})
-            </div>
-            
-            {inboxLoading ? (
-              <div className="px-3 py-8 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#ff5a3a] mx-auto mb-2"></div>
-                <div className="text-sm text-neutral-500">Loading requests...</div>
-              </div>
-            ) : inboxError ? (
-              <div className="px-3 py-8 text-center text-neutral-400 text-sm">
-                <div className="mb-2">⚠️</div>
-                <div>Error loading requests</div>
-                <div className="text-xs mt-1">{inboxError}</div>
-              </div>
-            ) : connectionRequests.length === 0 ? (
-              <div className="px-3 py-8 text-center text-neutral-400 text-sm">
-                <div className="mb-2">📬</div>
-                <div>No connection requests</div>
-                <div className="text-xs mt-1">New requests will appear here</div>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {connectionRequests.map((request) => (
-                  <div key={request.id} className="p-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start gap-3">
-                      {/* Avatar */}
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                      
-                      {/* Request Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="font-medium text-sm text-gray-900 truncate">
-                              {request.fromUserName}
-                            </h4>
-                            <p className="text-xs text-gray-500 truncate">
-                              {request.fromUserEmail}
-                            </p>
-                            <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                              <Clock className="w-3 h-3" />
-                              {formatTimestamp(request.createdAt)}
-                            </div>
+          <div className="overflow-y-auto h-full">
+            {activeTab === "messages" && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
+                  Friends ({chats.length})
+                </div>
+                {chats.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-neutral-400 text-sm">
+                    <div className="mb-2">💔</div>
+                    <div>No friends yet</div>
+                    <div className="text-xs mt-1">Keep swiping!</div>
+                  </div>
+                ) : (
+                  chats.map((chat) => {
+                    const active = chat.id === activeId;
+                    return (
+                      <button
+                        key={chat.id}
+                        onClick={() => setActiveId(chat.id)}
+                        className={cn(
+                          "w-full px-3 py-3 flex items-center gap-3 border-b transition-colors",
+                          active ? "bg-orange-50" : "hover:bg-neutral-50"
+                        )}
+                      >
+                        <div className="relative">
+                          <div className="size-10 rounded-full overflow-hidden">
+                            {chat.otherUserData?.avatarUrl ? (
+                              <img 
+                                src={chat.otherUserData.avatarUrl} 
+                                alt={chat.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold text-sm">
+                                {chat.name.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+                          {chat.unread ? (
+                            <span className="absolute -right-1 -top-1 text-[10px] font-semibold bg-[#ff5a3a] text-white rounded-full px-1.5 py-0.5">
+                              {chat.unread}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="text-left min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium text-sm truncate">{chat.name}</div>
+                            <div className="text-[11px] text-neutral-500">{chat.time}</div>
+                          </div>
+                          <div className="text-sm text-neutral-500 truncate">
+                            {chat.lastMessage || "Start your conversation! 💬"}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </>
+            )}
+
+            {activeTab === "inbox" && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
+                  Connection Requests ({connectionRequests.length})
+                </div>
+                
+                {inboxLoading ? (
+                  <div className="px-3 py-8 text-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#ff5a3a] mx-auto mb-2"></div>
+                    <div className="text-sm text-neutral-500">Loading requests...</div>
+                  </div>
+                ) : inboxError ? (
+                  <div className="px-3 py-8 text-center text-neutral-400 text-sm">
+                    <div className="mb-2">⚠️</div>
+                    <div>Error loading requests</div>
+                    <div className="text-xs mt-1">{inboxError}</div>
+                  </div>
+                ) : connectionRequests.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-neutral-400 text-sm">
+                    <div className="mb-2">📬</div>
+                    <div>No connection requests</div>
+                    <div className="text-xs mt-1">New requests will appear here</div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {connectionRequests.map((request) => (
+                      <div key={request.id} className="p-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <User className="w-5 h-5 text-white" />
                           </div>
                           
-                          {/* Action Buttons */}
-                          <div className="flex gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => declineConnection(request.id, request.fromUserName)}
-                              disabled={processingRequests.has(request.id)}
-                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Decline"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => acceptConnection(request.id, request.fromUserId, request.fromUserName)}
-                              disabled={processingRequests.has(request.id)}
-                              className="p-1.5 text-green-600 hover:bg-green-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Accept"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-medium text-sm text-gray-900 truncate">
+                                  {request.fromUserName}
+                                </h4>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {request.fromUserEmail}
+                                </p>
+                                <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                                  <Clock className="w-3 h-3" />
+                                  {formatTimestamp(request.createdAt)}
+                                </div>
+                              </div>
+                              
+                              <div className="flex gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => declineConnection(request.id, request.fromUserName)}
+                                  disabled={processingRequests.has(request.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Decline"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => acceptConnection(request.id, request.fromUserId, request.fromUserName)}
+                                  disabled={processingRequests.has(request.id)}
+                                  className="p-1.5 text-green-600 hover:bg-green-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Accept"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
 
-                        {/* Processing indicator */}
-                        {processingRequests.has(request.id) && (
-                          <div className="mt-2 flex items-center gap-2 text-xs text-blue-600">
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                            Processing...
+                            {processingRequests.has(request.id) && (
+                              <div className="mt-2 flex items-center gap-2 text-xs text-blue-600">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                Processing...
+                              </div>
+                            )}
                           </div>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </aside>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </aside>
 
         {/* CENTER: Conversation */}
         <section className="flex flex-col">
-          {/* convo header */}
           <div className="h-16 border-b px-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold">
-                {activeChat?.name?.charAt(0) || "?"}
+              <div className="size-10 rounded-full overflow-hidden">
+                {activeChat?.otherUserData?.avatarUrl ? (
+                  <img 
+                    src={activeChat.otherUserData.avatarUrl} 
+                    alt={activeChat.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold">
+                    {activeChat?.name?.charAt(0) || "?"}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="font-semibold">{activeChat?.name || "Select a chat"}</div>
@@ -809,7 +762,6 @@ export default function Messages() {
             </button>
           </div>
 
-          {/* bubbles */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-neutral-50">
             {!activeChat ? (
               <div className="h-full flex items-center justify-center text-neutral-400">
@@ -858,7 +810,6 @@ export default function Messages() {
             )}
           </div>
 
-          {/* composer */}
           <div className="border-t p-3 bg-white">
             <div className="flex items-center gap-2">
               <button className="p-2 rounded-md hover:bg-neutral-100 transition-colors">
@@ -891,8 +842,18 @@ export default function Messages() {
         {/* RIGHT: Profile panel */}
         <aside className="border-l bg-white">
           <div className="h-28 bg-gradient-to-r from-[#ff6a3d] to-[#ff5fa8] relative flex items-end justify-center">
-            <div className="absolute -bottom-8 size-20 rounded-full ring-4 ring-white bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-bold text-2xl">
-              {activeChat?.name?.charAt(0) || "?"}
+            <div className="absolute -bottom-8 size-20 rounded-full ring-4 ring-white overflow-hidden">
+              {activeChat?.otherUserData?.avatarUrl ? (
+                <img 
+                  src={activeChat.otherUserData.avatarUrl} 
+                  alt={activeChat.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-bold text-2xl">
+                  {activeChat?.name?.charAt(0) || "?"}
+                </div>
+              )}
             </div>
           </div>
           <div className="pt-12 px-5">
@@ -903,13 +864,9 @@ export default function Messages() {
 
             <div className="mt-6 border rounded-xl p-4">
               <div className="font-semibold mb-1">Bio</div>
-              {bioLoading ? (
-                <div className="text-sm text-neutral-400 italic">Loading bio...</div>
-              ) : (
-                <p className="text-sm text-neutral-500 italic">
-                  {activeChatBio || (activeChat ? "No bio available" : "Select a chat to view profile")}
-                </p>
-              )}
+              <p className="text-sm text-neutral-500 italic">
+                {activeChat?.otherUserData?.bio || (activeChat ? "No bio available" : "Select a chat to view profile")}
+              </p>
               <div className="mt-3 text-xs text-neutral-500 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" /> Joined March 2023
               </div>
@@ -918,13 +875,31 @@ export default function Messages() {
             <div className="mt-6">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-semibold">Photo Gallery</div>
-                <div className="text-xs text-neutral-500">3/12 photos</div>
+                <div className="text-xs text-neutral-500">
+                  {activeChat?.otherUserData?.photos?.length || 0}/12 photos
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="aspect-square rounded-lg bg-gradient-to-br from-blue-400 to-purple-500" />
-                <div className="aspect-square rounded-lg bg-gradient-to-br from-green-400 to-blue-500" />
-                <div className="aspect-square rounded-lg bg-gradient-to-br from-pink-400 to-red-500" />
-              </div>
+              {activeChat?.otherUserData?.photos && activeChat.otherUserData.photos.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {activeChat.otherUserData.photos.slice(0, 9).map((photo, index) => (
+                    <div key={index} className="aspect-square rounded-lg overflow-hidden">
+                      <img 
+                        src={photo} 
+                        alt={`Photo ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="aspect-square rounded-lg bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                    <span className="text-white text-xs">No photos</span>
+                  </div>
+                  <div className="aspect-square rounded-lg bg-gradient-to-br from-green-400 to-blue-500 opacity-50" />
+                  <div className="aspect-square rounded-lg bg-gradient-to-br from-pink-400 to-red-500 opacity-50" />
+                </div>
+              )}
             </div>
 
             {activeChat && (

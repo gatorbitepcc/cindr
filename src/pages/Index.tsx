@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
-import { Heart, Users, MapPin, Sparkles, UserPlus, Search, Settings, MessageCircle } from 'lucide-react';
+import { Heart, Users, MapPin, Sparkles, MessageCircle, Settings } from 'lucide-react';
 import heroImage from '@/assets/hero-image.jpg';
 
 const Index = () => {
@@ -73,41 +73,9 @@ const Index = () => {
             Choose your path to building meaningful connections and finding the support you need.
           </p>
           
-          <div className="grid md:grid-cols-4 gap-6">
-            {/* Find Groups Button (TEMP: goes to Settings) */}
-            <Link to="/settings" className="group">
-              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
-                <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
-                  <Search className="w-8 h-8 text-primary-foreground" />
-                </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-3">Find a Group</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Join existing support groups in your area and connect with others who share similar experiences.
-                </p>
-                <Button className="w-full bg-primary hover:bg-primary/90 group-hover:shadow-glow transition-shadow">
-                  Browse Groups
-                </Button>
-              </div>
-            </Link>
-
-            {/* Create Group Button */}
-            <Link to="/create-group" className="group">
-              <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
-                <div className="w-16 h-16 rounded-full bg-gradient-soft flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
-                  <UserPlus className="w-8 h-8 text-accent" />
-                </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-3">Create a Group</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Start your own support community and bring together people who need connection and understanding.
-                </p>
-                <Button variant="outline" className="w-full border-accent text-accent hover:bg-accent hover:text-accent-foreground">
-                  Start a Group
-                </Button>
-              </div>
-            </Link>
-
+          <div className="grid md:grid-cols-3 gap-6">
             {/* Meet People Button */}
-            <Link to="/meet-people" className="group">
+            <Link to="/find-matches" className="group">
               <div className="bg-card rounded-2xl p-8 shadow-card hover:shadow-card-hover transition-all duration-300 group-hover:scale-105">
                 <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-shadow">
                   <Heart className="w-8 h-8 text-success" />
@@ -130,7 +98,7 @@ const Index = () => {
                 </div>
                 <h3 className="text-xl font-semibold text-card-foreground mb-3">Messages</h3>
                 <p className="text-muted-foreground text-sm mb-6">
-                  Chat with people you’ve connected with and keep the conversation going.
+                  Chat with people you've connected with and keep the conversation going.
                 </p>
                 <Button variant="outline" className="w-full border-blue-400 text-blue-600 hover:bg-blue-100 hover:text-blue-800">
                   Open Messages
