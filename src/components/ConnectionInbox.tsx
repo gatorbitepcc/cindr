@@ -163,6 +163,7 @@ export default function ConnectionInbox() {
       </div>
     );
   }
+  
 
   return (
     <div className="bg-white rounded-lg shadow-lg">

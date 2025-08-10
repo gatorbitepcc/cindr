@@ -2,13 +2,16 @@ import { useMemo, useState, useEffect } from "react";
 import {
   MessageCircle,
   Users,
-  Search,
+  Inbox,
   MoreHorizontal,
   Send,
   MapPin,
   Camera,
   Image,    
   Clock,
+  X,
+  Check,
+  User
 } from "lucide-react";
 import { 
   collection, 
@@ -21,7 +24,8 @@ import {
   or,
   updateDoc,
   doc,
-  getDoc
+  getDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -42,6 +46,7 @@ interface Connection {
   lastMessageAt?: any;
   lastMessage?: string;
   lastMessageSenderId?: string;
+  status: string;
 }
 
 interface ChatInstance {
@@ -103,7 +108,6 @@ const formatMessageTime = (timestamp: any) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-// Custom hook to get user's connections as chat instances
 const useUserChats = (currentUserId: string) => {
   const [chats, setChats] = useState<ChatInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +124,8 @@ const useUserChats = (currentUserId: string) => {
     const connectionsMap = new Map<string, Connection>();
 
     const updateChats = () => {
-      const connections = Array.from(connectionsMap.values());
+      const connections = Array.from(connectionsMap.values())
+        .filter(connection => connection.status === 'accepted'); // FILTER: Only accepted connections
       
       // Sort by lastMessageAt desc, then createdAt desc
       connections.sort((a, b) => {
@@ -154,10 +159,11 @@ const useUserChats = (currentUserId: string) => {
       setError(null);
     };
 
-    // Query for connections where current user is the 'from' user
+    // Query for connections where current user is the 'from' user AND status is 'accepted'
     const fromQuery = query(
       collection(db, 'connections'),
-      where('fromUserId', '==', currentUserId)
+      where('fromUserId', '==', currentUserId),
+      where('status', '==', 'accepted') // FILTER: Only accepted connections
     );
 
     const unsubscribe1 = onSnapshot(
@@ -181,10 +187,11 @@ const useUserChats = (currentUserId: string) => {
       }
     );
 
-    // Query for connections where current user is the 'to' user
+    // Query for connections where current user is the 'to' user AND status is 'accepted'
     const toQuery = query(
       collection(db, 'connections'),
-      where('toUserId', '==', currentUserId)
+      where('toUserId', '==', currentUserId),
+      where('status', '==', 'accepted') // FILTER: Only accepted connections
     );
 
     const unsubscribe2 = onSnapshot(
@@ -318,12 +325,19 @@ const getUserBio = async (userId: string): Promise<string> => {
 };
 
 export default function Messages() {
+  const [activeTab, setActiveTab] = useState('messages');
   const [user, authLoading] = useAuthState(auth);
   const [activeId, setActiveId] = useState<string>("");
   const [input, setInput] = useState("");
   const [userProfile, setUserProfile] = useState<any>(null);
   const [activeChatBio, setActiveChatBio] = useState<string>("");
   const [bioLoading, setBioLoading] = useState(false);
+
+  // Inbox-specific state
+  const [connectionRequests, setConnectionRequests] = useState([]);
+  const [inboxLoading, setInboxLoading] = useState(true);
+  const [inboxError, setInboxError] = useState<string | null>(null);
+  const [processingRequests, setProcessingRequests] = useState(new Set());
 
   const currentUserId = user?.uid;
 
@@ -336,6 +350,54 @@ export default function Messages() {
     if (currentUserId) {
       getUserProfile(currentUserId).then(setUserProfile);
     }
+  }, [currentUserId]);
+
+  // Listen for connection requests (inbox functionality)
+  useEffect(() => {
+    if (!currentUserId) {
+      setConnectionRequests([]);
+      setInboxLoading(false);
+      return;
+    }
+
+    setInboxLoading(true);
+    
+    // Query for pending connection requests where current user is the recipient
+    const connectionsRef = collection(db, 'connections');
+    const q = query(
+      connectionsRef,
+      where('toUserId', '==', currentUserId),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const requests = [];
+        snapshot.forEach((doc) => {
+          requests.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        // Sort by creation date (newest first)
+        requests.sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) return 0;
+          return b.createdAt.seconds - a.createdAt.seconds;
+        });
+        
+        setConnectionRequests(requests);
+        setInboxLoading(false);
+        setInboxError(null);
+      },
+      (err) => {
+        console.error('Error listening to connection requests:', err);
+        setInboxError('Failed to load connection requests');
+        setInboxLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [currentUserId]);
 
   // Set first chat as active when chats load
@@ -382,6 +444,73 @@ export default function Messages() {
       time: formatMessageTime(msg.timestamp)
     }));
   }, [messages, currentUserId]);
+
+  // Accept connection request
+  const acceptConnection = async (requestId: string, fromUserId: string, fromUserName: string) => {
+    if (!currentUserId) return;
+
+    try {
+      setProcessingRequests(prev => new Set(prev).add(requestId));
+
+      const requestRef = doc(db, 'connections', requestId);
+      await updateDoc(requestRef, {
+        status: 'accepted',
+        acceptedAt: serverTimestamp(),
+        acceptedBy: currentUserId
+      });
+
+      console.log(`Accepted connection from ${fromUserName}`);
+      
+    } catch (err) {
+      console.error('Error accepting connection:', err);
+      setInboxError('Failed to accept connection request');
+    } finally {
+      setProcessingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
+    }
+  };
+
+  // Decline connection request
+  const declineConnection = async (requestId: string, fromUserName: string) => {
+    if (!currentUserId) return;
+
+    try {
+      setProcessingRequests(prev => new Set(prev).add(requestId));
+
+      // Delete the request
+      const requestRef = doc(db, 'connections', requestId);
+      await deleteDoc(requestRef);
+
+      console.log(`Declined connection from ${fromUserName}`);
+      
+    } catch (err) {
+      console.error('Error declining connection:', err);
+      setInboxError('Failed to decline connection request');
+    } finally {
+      setProcessingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
+    }
+  };
+
+  // Format timestamp for connection requests
+  const formatTimestamp = (timestamp: any) => {
+    if (!timestamp) return 'Just now';
+    
+    const now = new Date();
+    const requestTime = timestamp.toDate();
+    const diffInMinutes = Math.floor((now - requestTime) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
 
   const handleSend = async () => {
     if (!input.trim() || !activeId || !currentUserId) return;
@@ -439,7 +568,7 @@ export default function Messages() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-xl font-bold text-[#ff5a3a] mb-2">Cindr</div>
-          <div className="text-neutral-500">Loading your matches...</div>
+          <div className="text-neutral-500">Loading your friends...</div>
         </div>
       </div>
     );
@@ -462,6 +591,7 @@ export default function Messages() {
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-white">
@@ -488,74 +618,178 @@ export default function Messages() {
 
       <main className="grid grid-cols-[320px_minmax(0,1fr)_360px] h-[calc(100vh-56px)]">
         {/* LEFT: Chats list */}
-        <aside className="border-r">
-          {/* tabs */}
-          <div className="p-3 flex gap-2">
-            <button className="flex-1 h-9 rounded-lg border text-sm flex items-center justify-center gap-2 bg-white text-[#ff5a3a] border-[#ff5a3a]">
-              <Users className="w-4 h-4" /> Matcher
-            </button>
-            <button className="flex-1 h-9 rounded-lg bg-[#ff5a3a] text-white text-sm flex items-center justify-center gap-2">
-              <MessageCircle className="w-4 h-4" /> Messages
-            </button>
-          </div>
+             <aside className="w-80 border-r">
+        {/* tabs */}
+        <div className="p-3 flex gap-2">
+          <button 
+            className={cn(
+              "flex-1 h-9 rounded-lg border text-sm flex items-center justify-center gap-2 transition-colors",
+              activeTab === "inbox" 
+                ? "bg-white text-[#ff5a3a] border-[#ff5a3a]" 
+                : "bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100"
+            )}
+            onClick={() => setActiveTab("inbox")}
+          >
+            <Users className="w-4 h-4" /> Connections
+            {connectionRequests.length > 0 && (
+              <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                {connectionRequests.length}
+              </span>
+            )}
+          </button>
+          <button 
+            className={cn(
+              "flex-1 h-9 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors",
+              activeTab === "messages" 
+                ? "bg-[#ff5a3a] text-white" 
+                : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+            )}
+            onClick={() => setActiveTab("messages")}
+          >
+            <MessageCircle className="w-4 h-4" /> Messages
+          </button>
+        </div>
 
-          {/* search */}
-          <div className="px-3 pb-2">
-            <div className="h-10 px-3 rounded-lg border flex items-center gap-2 text-neutral-500">
-              <Search className="w-4 h-4" />
-              <input placeholder="Search matches" className="outline-none text-sm flex-1" />
-            </div>
-          </div>
+        <div className="overflow-y-auto h-full">
+          {/* Messages tab */}
+          {activeTab === "messages" && (
+            <>
+              <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
+                Friends ({chats.length})
+              </div>
+              {chats.length === 0 ? (
+                <div className="px-3 py-8 text-center text-neutral-400 text-sm">
+                  <div className="mb-2">💔</div>
+                  <div>No friends yet</div>
+                  <div className="text-xs mt-1">Keep swiping!</div>
+                </div>
+              ) : (
+                chats.map((chat) => {
+                  const active = chat.id === activeId;
+                  return (
+                    <button
+                      key={chat.id}
+                      onClick={() => setActiveId(chat.id)}
+                      className={cn(
+                        "w-full px-3 py-3 flex items-center gap-3 border-b transition-colors",
+                        active ? "bg-orange-50" : "hover:bg-neutral-50"
+                      )}
+                    >
+                      <div className="relative">
+                        <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold text-sm">
+                          {chat.name.charAt(0)}
+                        </div>
+                        {chat.unread ? (
+                          <span className="absolute -right-1 -top-1 text-[10px] font-semibold bg-[#ff5a3a] text-white rounded-full px-1.5 py-0.5">
+                            {chat.unread}
+                          </span>
+                        ) : null}
+                      </div>
 
-          {/* chat list */}
-          <div className="overflow-y-auto">
+                      <div className="text-left min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium text-sm truncate">{chat.name}</div>
+                          <div className="text-[11px] text-neutral-500">{chat.time}</div>
+                        </div>
+                        <div className="text-sm text-neutral-500 truncate">
+                          {chat.lastMessage || "Start your conversation! 💬"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </>
+          )}
+
+        {/* Inbox tab */}
+        {activeTab === "inbox" && (
+          <>
             <div className="px-3 py-2 text-xs font-semibold text-neutral-500">
-              Matches ({chats.length})
+              Connection Requests ({connectionRequests.length})
             </div>
-            {chats.length === 0 ? (
+            
+            {inboxLoading ? (
+              <div className="px-3 py-8 text-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#ff5a3a] mx-auto mb-2"></div>
+                <div className="text-sm text-neutral-500">Loading requests...</div>
+              </div>
+            ) : inboxError ? (
               <div className="px-3 py-8 text-center text-neutral-400 text-sm">
-                <div className="mb-2">💔</div>
-                <div>No matches yet</div>
-                <div className="text-xs mt-1">Keep swiping!</div>
+                <div className="mb-2">⚠️</div>
+                <div>Error loading requests</div>
+                <div className="text-xs mt-1">{inboxError}</div>
+              </div>
+            ) : connectionRequests.length === 0 ? (
+              <div className="px-3 py-8 text-center text-neutral-400 text-sm">
+                <div className="mb-2">📬</div>
+                <div>No connection requests</div>
+                <div className="text-xs mt-1">New requests will appear here</div>
               </div>
             ) : (
-              chats.map((chat) => {
-                const active = chat.id === activeId;
-                return (
-                  <button
-                    key={chat.id}
-                    onClick={() => setActiveId(chat.id)}
-                    className={cn(
-                      "w-full px-3 py-3 flex items-center gap-3 border-b transition-colors",
-                      active ? "bg-orange-50" : "hover:bg-neutral-50"
-                    )}
-                  >
-                    <div className="relative">
-                      <div className="size-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center text-white font-semibold text-sm">
-                        {chat.name.charAt(0)}
+              <div className="divide-y divide-gray-100">
+                {connectionRequests.map((request) => (
+                  <div key={request.id} className="p-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <User className="w-5 h-5 text-white" />
                       </div>
-                      {chat.unread ? (
-                        <span className="absolute -right-1 -top-1 text-[10px] font-semibold bg-[#ff5a3a] text-white rounded-full px-1.5 py-0.5">
-                          {chat.unread}
-                        </span>
-                      ) : null}
-                    </div>
+                      
+                      {/* Request Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-medium text-sm text-gray-900 truncate">
+                              {request.fromUserName}
+                            </h4>
+                            <p className="text-xs text-gray-500 truncate">
+                              {request.fromUserEmail}
+                            </p>
+                            <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                              <Clock className="w-3 h-3" />
+                              {formatTimestamp(request.createdAt)}
+                            </div>
+                          </div>
+                          
+                          {/* Action Buttons */}
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => declineConnection(request.id, request.fromUserName)}
+                              disabled={processingRequests.has(request.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Decline"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => acceptConnection(request.id, request.fromUserId, request.fromUserName)}
+                              disabled={processingRequests.has(request.id)}
+                              className="p-1.5 text-green-600 hover:bg-green-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Accept"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
 
-                    <div className="text-left min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium text-sm truncate">{chat.name}</div>
-                        <div className="text-[11px] text-neutral-500">{chat.time}</div>
-                      </div>
-                      <div className="text-sm text-neutral-500 truncate">
-                        {chat.lastMessage || "Start your conversation! 💬"}
+                        {/* Processing indicator */}
+                        {processingRequests.has(request.id) && (
+                          <div className="mt-2 flex items-center gap-2 text-xs text-blue-600">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                            Processing...
+                          </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </aside>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </aside>
 
         {/* CENTER: Conversation */}
         <section className="flex flex-col">
